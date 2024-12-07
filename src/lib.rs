@@ -11,6 +11,10 @@ pub fn sum_middle_pages(input_path: &str) -> u32 {
         .fold(0, |acc, value| acc + value)
 }
 
+pub fn sum_re_ordered_middle_pages(input_path: &str) -> u32 {
+    return 0;
+}
+
 fn read_puzzle(input_path: &str) -> Puzzle {
 
     let mut previous_pages: HashMap<u32, Vec<u32>> = HashMap::new();
