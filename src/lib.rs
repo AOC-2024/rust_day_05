@@ -1,6 +1,5 @@
-use std::{collections::HashMap, fs::read_to_string, str::FromStr};
+use std::{collections::{HashMap, HashSet, VecDeque}, fs::read_to_string, str::FromStr};
 use regex::Regex;
-
 
 pub fn sum_middle_pages(input_path: &str) -> u32 {
     let puzzle = read_puzzle(input_path);
@@ -12,7 +11,12 @@ pub fn sum_middle_pages(input_path: &str) -> u32 {
 }
 
 pub fn sum_re_ordered_middle_pages(input_path: &str) -> u32 {
-    return 0;
+    let puzzle = read_puzzle(input_path);
+
+    puzzle.re_order_updates()
+        .iter()
+        .map(|value| value[value.len() / 2])
+        .fold(0, |acc, value| acc + value)
 }
 
 fn read_puzzle(input_path: &str) -> Puzzle {
@@ -82,6 +86,63 @@ impl Puzzle {
             .collect::<Vec<Vec<u32>>>()
     }
 
+    fn re_order_updates(&self) -> Vec<Vec<u32>> {
+        self.updates
+            .clone()
+            .into_iter()
+            .filter(|update| !self.is_update_ordered(update))
+            .map(|update| self.re_order_update(&update))
+            .collect::<Vec<Vec<u32>>>()
+    }
+
+    fn re_order_update(&self, update: &Vec<u32>) -> Vec<u32> {
+        let mut graph = HashMap::new();
+        let mut in_degree = HashMap::new();
+
+        for &page in update {
+            graph.entry(page).or_insert_with(Vec::new);
+            in_degree.entry(page).or_insert(0);
+        }
+
+        for (&page, dependencies) in &self.previous_pages {
+            for &dependency in dependencies {
+                if update.contains(&page) && update.contains(&dependency) {
+                    graph.entry(dependency).or_default().push(page);
+                    *in_degree.entry(page).or_insert(0) += 1;
+                }
+            }
+        }
+
+        let mut queue: VecDeque<u32> = in_degree
+            .iter()
+            .filter(|&(_, &count)| count == 0)
+            .map(|(&page, _)| page)
+            .collect();
+
+        let mut ordered = Vec::new();
+        while let Some(page) = queue.pop_front() {
+            ordered.push(page);
+
+            if let Some(dependents) = graph.get(&page) {
+                for &dependent in dependents {
+                    if let Some(entry) = in_degree.get_mut(&dependent) {
+                        *entry -= 1;
+                        if *entry == 0 {
+                            queue.push_back(dependent);
+                        }
+                    }
+                }
+            }
+        }
+
+        let remaining: HashSet<u32> = update.iter().cloned().collect();
+        let ordered_set: HashSet<u32> = ordered.iter().cloned().collect();
+        let orphans: Vec<u32> = remaining.difference(&ordered_set).cloned().collect();
+
+        ordered.extend(orphans);
+        ordered
+    }
+
     fn is_update_ordered(&self, update: &Vec<u32>) -> bool {
         for index in 0..update.len() {
             let empty_vec: Vec<u32> = Vec::new();
@@ -108,6 +169,13 @@ impl Puzzle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn should_re_ordered_update() {
+        let puzzle = read_puzzle("tests/resources/puzzle.txt");
+        
+        assert_eq!(puzzle.re_order_update(&vec![75, 97, 47, 61, 53]), vec![97, 75, 47, 61, 53]);
+    }
 
     #[test]
     fn should_find_ordered_update_true() {
